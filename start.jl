@@ -47,7 +47,7 @@ end every 50
 end
 
 
-function create_sine(amp, freq, phas, inter=0:0.001:π)
+function create_sine(freq, amp=1, phas=0, inter=0:0.001:2π)
         signal = amp*sin.(2π * freq .* inter .+ phas)
         return signal
 end
@@ -59,4 +59,31 @@ function plot_sine_sum(inter, sigs)
         sum = plot(inter, signal, title="Input sig")
         decor = plot(inter, signal, Title = "Decorelated")
         plot(decor, sum, layout=2)
+end
+
+function Doppler(sig, sender::space_obj, receiver::space_obj)
+        c = 2.99792458e8
+        frec = exp10(2)
+end
+
+
+const earth_img = load(download("https://svs.gsfc.nasa.gov/vis/a000000/a002900/a002915/bluemarble-2048.png"));
+
+using GLMakie, FileIO, Colors, GeometryBasics # Plot related libraries
+function PlotEarth(trajectories, earth)
+    # Earth Image
+
+    # Constants
+    R⨁ = 6371. # [km] Earth Mean Radius
+
+     f, lscene = mesh(
+        Sphere(Point3f0(0), R⨁),
+        color = earth,
+        shading = true
+        # axis = (title="Earth 3D", xlabel = "Xᵢ (km)", ylabel = "Yᵢ (km)", zlabel = "Zᵢ (km)" )
+      );
+      axis = lscene.scene[OldAxis];
+      axis[:names, :axisnames] = ("Xᵢ (km)", "Yᵢ (km)", "Zᵢ (km)");
+      axis.title = "Earth 3D";
+    f
 end
