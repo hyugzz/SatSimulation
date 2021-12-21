@@ -1,3 +1,4 @@
+include("gravity_utils.jl")
 using Core,Base,Distances, Plots, SatelliteToolbox
 
 
@@ -12,7 +13,7 @@ x = Float64[]
 y = Float64[]
 z = Float64[]
 
-x,y,z = DisassembleVector(r)
+#x,y,z = DisassembleVector(r)
 
 plt = plot3d(r, xlim=(-6000000,6000000),ylim=(-6000000,6000000),zlim=(-6000000,6000000))
 

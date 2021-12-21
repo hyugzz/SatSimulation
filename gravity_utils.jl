@@ -14,13 +14,21 @@ module MyGravity
         end
     end
 
+    function set_spe(self::space_obj, spe::Vector{Float64})
+        self.v = spe
+    end
+
+    function set_pos(self::space_obj, pos::Vector{Float64})
+        self.p = pos
+    end
+
     function update_spe(self::space_obj, delta::Float64)
         self.v += self.a.*delta;
     end
 
     function update_pos(self::space_obj, delta::Float64)
         update_spe(self, delta);
-        return self.p += self.v.*delta
+        self.p += self.v.*delta
     end
 
 
@@ -58,8 +66,12 @@ module MyGravity
         return x,y,z
     end
 
-    function ShowOrbit(vectorList)
+    function ShowOrbit(vectorList, print::Bool)
         x,y,z = DisassembleVector(vectorList)
-        plot(x,y,z)
+        if print
+            plot(x,y,z)
+        else
+            return plot(x,y,z)
+        end
     end
 end
