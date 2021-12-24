@@ -8,7 +8,7 @@ using Main.signal_utils, Main.MyGravity, Plots, SatelliteToolbox, FFTW, PlotlyBa
 const global c = 2.99792458e8
 plotly()
 tles = read_tle("starlink.txt")
-sig = signal_utils.cofdm([true, false, true, true, false, true, false, false], 1, 15000.0, 5.00e9, 1.0)
+sig = signal_utils.cofdm([true, false, true, true, false, true, false, false], 1, 15000.0, 5.00e9, 1.0, 15.0)
 doppler_ratio = Float64[]
 
 #SGP4 - Generating orbit
@@ -16,38 +16,39 @@ orbit = init_orbit_propagator(Val(:sgp4), tles[1])
 r, v = propagate!(orbit, collect(0:1:150)*60)
 
 #Initializing cartesian objects
+x,y,z = MyGravity.DisassembleVector(r)
+x1,y1,z1 = MyGravity.DisassembleVector(v)
 receiver = MyGravity.space_obj([0.0,0.0,0.0], [0.0,0.0,0.0], [0.0,0.0,0.0], 0.0)
-sender   = MyGravity.space_obj([1000.0,0.0,0.0], [1000.0,0.0,0.0], [-10000000000.0,0.0,0.0], 0.0)
+sender   = MyGravity.space_obj([0.0,0.0,0.0], [x1[1], y1[1], z1[1]], [x[1], y[1], z[1]], 0.0)
 
 #Calculate doppler ratio for the two space objects
-for i in 1:1000
+for i in 1:length(x)
     append!(doppler_ratio, signal_utils.Doppler(sender, receiver))
-    MyGravity.update_pos(sender, 1.0)
+    MyGravity.set_pos(sender, [x[i], y[i], z[i]])
+    MyGravity.set_spe(sender, [x1[i], y1[i], z1[i]])
 end
 plot(doppler_ratio)
 
 #Generating signal
-a = signal_utils.cofdm([true, false, true, true, false, true, false, true], 4, 100.0, 1000.0, 1.0)
+a = signal_utils.cofdm([true, false, true, true, false, true, false, true], 4, 100.0, 1000.0, 1.0, 15)
 sig = signal_utils.generate_signal(a, 1.0)
 plot(sig)
 
-#Calculating DFT
-trans = FFTW.r2r(sig[1:10001], FFTW.DHT)
-plot(fftshift(-trans))
-plot(trans)
+plots = Plot[]
+fft_data = Vector{Array{Float64}}
+
+#DFT transform of the signal
+plots, fft_data = signal_utils.AnalyzeSignal(sig, 8)
+for i in 1:length(plots)
+    display(plots[i])
+end
 
 
-x,y,z = MyGravity.DisassembleVector(r)
-x1,y1,z1 = MyGravity.DisassembleVector(v)
-Main.MyGravity.set_pos(sender, [x[1], y[1], z[1]])
-Main.MyGravity.set_spe(sender, [x1[1], y1[1], z1[1]])
-
-a = signal_utils.generate_signal(sig, 1.0)
-signal_utils.Doppler(1.0, sender, receiver)
-
-bit_0 = sig[1:10001]
-plots = signal_utils.AnalyzeSignal(sig, 8)
-plot(plots[1],plots[2],plots[3])
+plot(fft_data[1])
+k = [Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[]]
+for i in 1:length(fft_data)
+    k[i] = signal_utils.reconstruct_data(a, fft_data[i])
+end
 
 for i in 1:151
     append!(dist, abs(signal_utils.NormeVecteur(sender.p - receiver.p)))

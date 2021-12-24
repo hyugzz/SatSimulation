@@ -10,6 +10,7 @@ module signal_utils
         interval::Float64   #Interval between cofdm channels
         frequency::Float64  #Base frequency for transmission
         transmission_rate::Float64  #Time between two signal modulations
+        peak_tolerance::Int64 #Accepted shifting in frequency during FFT to reconstruct a bit
     end
     "Defines data of the frame to be transmitted"
     function  define_data(self::cofdm, in::Vector{Bool})
@@ -76,22 +77,66 @@ module signal_utils
             return signal
     end
     "Returns the DFTs of the input signal sequence"
-    function AnalyzeSignal(sig, nb_bit)
+    function AnalyzeSignal(sig::Vector{Float64} , nb_bit)
         #number of points
-        N = length(sig/nb_bit) - 1
+        N = (length(sig)/nb_bit) - 1
         #sample period
         Ts = 0.0001
         t0 = 0
         tmax = t0 + N * Ts
         t = t0:Ts:tmax
         plots = Plots.Plot[]
+        ffts = [Float64[],Float64[],Float64[],Float64[],Float64[],Float64[],Float64[],Float64[],]
+        vcat(ffts)
         for i in 0:nb_bit-1
+
             bit = sig[trunc(Int,(1/Ts)*i)+1:trunc(Int, (1/Ts)*(i+1))+i]
             F = FFTW.r2r(bit, FFTW.DHT) |> fftshift
             freqs = fftfreq(length(bit), 1.0/Ts) |> fftshift
-            freq_domain = plot(freqs, abs.(F), title = "Spectrum", xlim=(500,2000))
+            freq_domain = plot(freqs, abs.(F), title = "Bit $i", xlim=(0,2000))
             push!(plots, freq_domain)
+            append!(ffts[i+1],F)
         end
-        return plots
+        return plots, ffts
+    end
+    "Reconstruct the cofdm data from the FFT"
+    function reconstruct_data(self::cofdm, fft::Vector{Float64})
+        sym = fft[trunc(Int, length(fft)/2):end]
+        waves = Int64[]
+        around = 2
+        is_local_peak = false
+        is_down = false
+        for i in 1:trunc(Int, length(sym))-1
+            if sym[i] > sym[i+1] && !is_down   #Found peak, and value rising
+                is_down = true
+                for j in i-around:i+around
+                    if j > 0 && j < length(sym)
+                        if sym[j] > sym[i] #Local peak
+                            is_local_peak = true
+                            break
+                        end
+                        is_local_peak = false
+                    end
+                end
+                if !is_local_peak && sym[i] > 50
+                    push!(waves,i)
+                end
+            else
+                is_down = false
+            end
+        end #Peak filled
+        #Bits reconstruction
+        bits = []
+        for channel in 1:length(waves)
+                if abs(waves[channel]-(self.frequency+self.interval/2+(channel-1)*self.interval)) < self.interval   #If the peak is in the cofdm channel
+                    # 1 --> True
+                    push!(bits, true)
+                elseif abs(waves[channel]-(self.frequency+(channel-1)*self.interval)) < self.interval
+                    #0 --> False
+                    push!(bits, false)
+                end
+            end
+        end
+#        return bits
     end
 end
