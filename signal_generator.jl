@@ -128,15 +128,15 @@ module signal_utils
         #Bits reconstruction
         bits = []
         for channel in 1:length(waves)
-                if abs(waves[channel]-(self.frequency+self.interval/2+(channel-1)*self.interval)) < self.interval   #If the peak is in the cofdm channel
-                    # 1 --> True
-                    push!(bits, true)
-                elseif abs(waves[channel]-(self.frequency+(channel-1)*self.interval)) < self.interval
-                    #0 --> False
-                    push!(bits, false)
-                end
+            if abs(waves[channel]-(self.frequency+(channel-1)*self.interval)) < self.interval/2   #If the peak is in the cofdm channel
+                #0 --> False
+                push!(bits, false)
+            elseif abs(waves[channel]-(self.frequency+(channel-1)*self.interval)) < self.interval
+                # 1 --> True
+                push!(bits, true)
+
             end
         end
-#        return bits
+        return bits
     end
 end
