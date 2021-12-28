@@ -30,7 +30,7 @@ end
 plot(doppler_ratio)
 
 #Generating signal
-a = signal_utils.cofdm([true, false, true, true, false, true, false, true], 4, 100.0, 1000.0, 1.0, 15)
+a = signal_utils.cofdm([true, false, true, true, false, true, false, false], 8, 15000.0, 5.00e5, 1.0, 15.0)
 sig = signal_utils.generate_signal(a, 1.0)
 plot(sig)
 
@@ -38,18 +38,21 @@ plots = Plot[]
 fft_data = Vector{Array{Float64}}
 
 #DFT transform of the signal
-plots, fft_data = signal_utils.AnalyzeSignal(sig, 8)
+plots, fft_data, fft_freq = signal_utils.AnalyzeSignal(sig, 8)
 for i in 1:length(plots)
     display(plots[i])
 end
+plot(fft_data[1])
 
-
+fft_data[1]
 plot(fft_data[1])
 k = [Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[]]
 for i in 1:length(fft_data)
-    k[i] = signal_utils.reconstruct_data(a, fft_data[i])
+    k[i] = signal_utils.reconstruct_data(a, fft_data[i], fft_freq)
 end
 
+# Stats about orbit
+length([fft_data[1]])
 for i in 1:151
     append!(dist, abs(signal_utils.NormeVecteur(sender.p - receiver.p)))
     append!(doppler_ratio, signal_utils.Doppler(1.0, sender, receiver))
@@ -57,6 +60,20 @@ for i in 1:151
     Main.MyGravity.set_pos(sender, [x[i], y[i], z[i]])
     Main.MyGravity.set_spe(sender, [x1[i], y1[i], z1[i]])
 end
+
+shifted_fft = Float64[]
+tmp_fft = fft_data[1:8][trunc(Int, length(fft_data[1:8])/2):length(fft_data[1:8])]
+true_shift = signal_utils.ShiftSignal(fft_data, a, fft_freq)
+for i in 2:trunc(Int, length(fft_data[1])/2)
+    if i < length(tmp_fft)/2
+        push!(shifted_fft, tmp_fft[trunc(Int, i*1/(0.5))])
+    end
+end
+plot(shifted_fft)
+
+plot(shifted_fft)
+plot(tmp_fft)
+
 
 doppler_ratio = Float64[]
 posx = Float64[]
