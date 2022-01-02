@@ -182,9 +182,10 @@ module signal_utils
                     for i in 1:bit  # Clear the false data
                         empty!(true_data[i])
                     end
-                    printstyled("$shift", color=orange)
+                    printstyled("$shift", color=:orange)
                     break
                 end
+                empty!(bits)
             end
             if is_correct
                 break

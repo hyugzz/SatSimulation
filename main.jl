@@ -60,7 +60,7 @@ end
 
 shifted_ffts = [Vector{Bool}()  for _ in 1:length(fft_data)]
 bits = Float64[]
-for i in length(fft_data)
+for i in 1:length(fft_data)
     shifted_fft = Vector{Float64}()
     for k in 1:length(fft_data[i])    # FFT frequency shift loop
         if trunc(Int,k*1.1) < length(fft_data[i])
@@ -73,8 +73,7 @@ for i in length(fft_data)
             push!(shifted_fft, 0.0)
         end
     end
-    push!(shifted_ffts[i], signal_utils.reconstruct_data(a, shifted_fft, fft_freq))
-
+    shifted_ffts[i] = signal_utils.reconstruct_data(a, shifted_fft, fft_freq)
 end
 popfirst!(shifted_fft)
 # Is the is shift correct for this bit
