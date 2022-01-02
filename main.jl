@@ -7,13 +7,18 @@ using Main.signal_utils, Main.MyGravity, Plots, SatelliteToolbox, FFTW, PlotlyBa
 #Variables initiation
 const global c = 2.99792458e8
 plotly()
+                        #8 channel, 5MHz carrier, 15KHz subcarrier, 15 MHz sampling frequency
+a = signal_utils.cofdm([[true, false, true, true, false, true, false, false],
+                        [true, true, false, true, false, true, false, true],
+                        [false, true, false, false, false, true, false, true],
+                        [false, false, true, false, true, false, true, true]],
+                        8, 15000.0, 5.00e6, 0.001, 1500.0, 1.5e7)
 tles = read_tle("starlink.txt")
-sig = signal_utils.cofdm([true, false, true, true, false, true, false, false], 1, 15000.0, 5.00e9, 1.0, 15.0)
 doppler_ratio = Float64[]
 
 #SGP4 - Generating orbit
 orbit = init_orbit_propagator(Val(:sgp4), tles[1])
-r, v = propagate!(orbit, collect(0:1:150)*60)
+r, v = propagate!(orbit, collect(0:1:6000)*15)
 
 #Initializing cartesian objects
 x,y,z = MyGravity.DisassembleVector(r)
@@ -30,26 +35,52 @@ end
 plot(doppler_ratio)
 
 #Generating signal
-a = signal_utils.cofdm([true, false, true, true, false, true, false, false], 8, 15000.0, 5.00e5, 1.0, 15.0)
-sig = signal_utils.generate_signal(a, 1.0)
+sig = signal_utils.generate_signal(a, 1.1)
 plot(sig)
+
+signal_utils.AnalyzeSignal(a, sig, 4)
 
 plots = Plot[]
 fft_data = Vector{Array{Float64}}
 
 #DFT transform of the signal
-plots, fft_data, fft_freq = signal_utils.AnalyzeSignal(sig, 8)
+plots, fft_data, fft_freq = signal_utils.AnalyzeSignal(a, sig, 4)
 for i in 1:length(plots)
     display(plots[i])
 end
-plot(fft_data[1])
+plot(fft_freq, fft_data[1])
 
 fft_data[1]
 plot(fft_data[1])
-k = [Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[],Int64[]]
-for i in 1:length(fft_data)
+k = [Vector{Bool}() for _ in 1:length(a.data)]
+for i in 1:4
     k[i] = signal_utils.reconstruct_data(a, fft_data[i], fft_freq)
 end
+
+
+shifted_ffts = [Vector{Bool}()  for _ in 1:length(fft_data)]
+bits = Float64[]
+for i in length(fft_data)
+    shifted_fft = Vector{Float64}()
+    for k in 1:length(fft_data[i])    # FFT frequency shift loop
+        if trunc(Int,k*1.1) < length(fft_data[i])
+            if trunc(Int, k*1.1) == 0
+                push!(shifted_fft, fft_data[i][1])
+            else
+                push!(shifted_fft, fft_data[i][trunc(Int, k*1.1)])
+            end
+        else
+            push!(shifted_fft, 0.0)
+        end
+    end
+    push!(shifted_ffts[i], signal_utils.reconstruct_data(a, shifted_fft, fft_freq))
+
+end
+popfirst!(shifted_fft)
+# Is the is shift correct for this bit
+bits = signal_utils.reconstruct_data(a, shifted_fft, fft_freq)
+
+plot(fft_freq,shifted_fft)
 
 # Stats about orbit
 length([fft_data[1]])
@@ -62,8 +93,8 @@ for i in 1:151
 end
 
 shifted_fft = Float64[]
-tmp_fft = fft_data[1:8][trunc(Int, length(fft_data[1:8])/2):length(fft_data[1:8])]
-true_shift = signal_utils.ShiftSignal(fft_data, a, fft_freq)
+tmp_fft = fft_data[begin:end][trunc(Int, length(fft_data[begin:end])/2):length(fft_data[begin:end])]
+true_shift, k = signal_utils.ShiftSignal(fft_data, a, fft_freq)
 for i in 2:trunc(Int, length(fft_data[1])/2)
     if i < length(tmp_fft)/2
         push!(shifted_fft, tmp_fft[trunc(Int, i*1/(0.5))])
