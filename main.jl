@@ -7,6 +7,7 @@ using Main.signal_utils, Main.MyGravity, Plots, SatelliteToolbox, FFTW, PlotlyBa
 #Variables initiation
 const global c = 2.99792458e8
 plotly()
+sequences = [rand(Bool, 8,4) for _ in 1:10]
                         #8 channel, 5MHz carrier, 15KHz subcarrier, 15 MHz sampling frequency
 a = signal_utils.cofdm([[true, false, true, true, false, true, false, false],
                         [true, true, false, true, false, true, false, true],
