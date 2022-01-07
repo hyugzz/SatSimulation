@@ -8,12 +8,13 @@ using Main.signal_utils, Main.MyGravity, Plots, SatelliteToolbox, FFTW, PlotlyBa
 const global c = 2.99792458e8
 plotly()
 sequences = [rand(Bool, 8,4) for _ in 1:10]
-                        #8 channel, 5MHz carrier, 15KHz subcarrier, 15 MHz sampling frequency
+                        #8 channel data, 2 channels sync, 5MHz carrier, 15KHz subcarrier, 15 MHz sampling frequency
 a = signal_utils.cofdm([[true, false, true, true, false, true, false, false],
                         [true, true, false, true, false, true, false, true],
                         [false, true, false, false, false, true, false, true],
                         [false, false, true, false, true, false, true, true]],
-                        8, 15000.0, 5.00e6, 0.001, 1500.0, 1.5e7)
+                        [[false,true], [true,true], [false, true], [false, false]],
+                        8, [1,8], 15000.0, 5.00e6, 0.001, 4, 1.5e7)
 tles = read_tle("starlink.txt")
 doppler_ratio = Float64[]
 
@@ -36,7 +37,7 @@ end
 plot(doppler_ratio)
 
 #Generating signal
-sig = signal_utils.generate_signal(a, 1.1)
+sig = signal_utils.generate_signal(a, 1.0)
 plot(sig)
 
 signal_utils.AnalyzeSignal(a, sig, 4)
@@ -64,11 +65,11 @@ bits = Float64[]
 for i in 1:length(fft_data)
     shifted_fft = Vector{Float64}()
     for k in 1:length(fft_data[i])    # FFT frequency shift loop
-        if trunc(Int,k*1.1) < length(fft_data[i])
-            if trunc(Int, k*1.1) == 0
+        if trunc(Int,k*0.85) < length(fft_data[i])
+            if trunc(Int, k*0.85) == 0
                 push!(shifted_fft, fft_data[i][1])
             else
-                push!(shifted_fft, fft_data[i][trunc(Int, k*1.1)])
+                push!(shifted_fft, fft_data[i][trunc(Int, k*0.85)])
             end
         else
             push!(shifted_fft, 0.0)

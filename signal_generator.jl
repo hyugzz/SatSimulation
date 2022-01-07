@@ -5,17 +5,35 @@ module signal_utils
     using Plots, FFTW, DSP
     const global c = 2.99792458e8
     mutable struct cofdm
-        data::Vector{Vector{Bool}}  #Array of boolean data transmitted
-        nb_channel::Int64   #Number of channels of the cofdm
-        interval::Float64   #Interval between cofdm channels
-        frequency::Float64  #Base frequency for transmission
-        transmission_rate::Float64  #Time between two signal modulations
-        peak_tolerance::Int64 #Accepted shifting in frequency during FFT to reconstruct a bit
-        sampling_rate::Float64  #Sampling rate respecting Nyquist limit
+        "Array of boolean data transmitted"
+        data::Vector{Vector{Bool}}
+        "Array of boolean data used for synchronization"
+        sync_data::Vector{Vector{Bool}}
+        "Number of channels of the cofdm"
+        nb_channel::Int64
+        "channels used for synchronization"
+        sync_channels::Vector{Int64}
+        "Interval between cofdm channels"
+        interval::Float64
+        "Base frequency for transmission"
+        frequency::Float64
+        "Time between two signal modulations"
+        transmission_rate::Float64
+        "Accepted number of errors in synchronization channels"
+        error_tolerance::Int64
+        "Sampling rate respecting Nyquist limit"
+        sampling_rate::Float64
     end
     "Defines data of the frame to be transmitted"
-    function  define_data(self::cofdm, in::Vector{Vector{Bool}})
+    function  define_data(self::cofdm, in::Vector{Vector{Bool}}, sync::Vector{Vector{Bool}})
         self.data = in;
+        if length(sync) == length(self.sync_channels)
+            self.sync_data = sync
+        elseif length(sync) >= length(self.sync_channels)
+            self.data = sync[1:length(self.sync_channels)]
+        else
+            printstyled("Sync data is not the right size ($(length(self.sync_channels)))\nIgnore")
+        end
     end
     "Generates signal with cofdm, data is modulated only in frequency"
     function generate_signal(self::cofdm, doppler::Float64)
@@ -26,14 +44,28 @@ module signal_utils
         for i in 0:1/self.sampling_rate:self.transmission_rate
             append!(tmp_signal, 0.0)
         end
+        nb_seq = 0
         for seq in self.data
-            for chan_bit in 1:length(seq)
-                if seq[chan_bit]==1           # 1 --> Higher frequency
-                    tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
-                    tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
-                elseif seq[chan_bit]==0       # 0 --> Lower frequency
-                    tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
-                    tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+            nb_seq += 1
+            for chan_bit in 1:length(seq)+length(self.sync_channels)
+                for i in length(self.sync_channels)
+                    if chan_bit == self.sync_channels[i]
+                        if sync_data[nb_seq][i]==1           # 1 --> Higher frequency
+                            tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
+                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+                        elseif sync_data[nb_seq]==0       # 0 --> Lower frequency
+                            tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
+                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+                        end
+                    else
+                        if seq[chan_bit]==1           # 1 --> Higher frequency
+                            tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
+                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+                        elseif seq[chan_bit]==0       # 0 --> Lower frequency
+                            tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
+                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+                        end
+                    end
                 end
             end
             # Channel filled, append the signal
@@ -148,9 +180,10 @@ module signal_utils
         is_correct = false
         true_shift = 0.0
         true_data = [Vector{Bool}() for _ in 1:length(ffts)]
-        for shift in 0.85:0.000001:1.5   # Value for maximum shift (8Km/s)
+        for shift in 0.849:0.000001:0.90   # Value for maximum shift (8Km/s)
+            error_number = 0
             for bit in 1:length(ffts) # For each sequence of cofdm
-                shifted_fft = Float64[]
+                shifted_fft = Vector{Float64}()
                 empty!(shifted_fft)
                 for k in 1:length(ffts[bit])    # FFT frequency shift loop
                     if trunc(Int,k*shift) < length(ffts[bit])
@@ -165,15 +198,24 @@ module signal_utils
                 end
                 # Is the is shift correct for this bit
                 bits = reconstruct_data(self, shifted_fft, freq)
-                if isempty(bits) || length(bits) != length(self.data[bit])
+                if isempty(bits) || length(bits) != length(self.data[bit])+length(self.sync_data[bit]) # If is empty or is not the right size
                     is_correct = false
                     for i in 1:bit  # Clear the false data
                         empty!(true_data[i])
                     end
                     break
-                elseif bits[1] == self.data[bit][1] && bits[8] == self.data[bit][8] # If the peak is shifted correctly
-                    printstyled("Bit $(bit-1) is correctly shifted with $shift\n", color=:green)
-                    println("Its value is $(bits[1])")
+                elseif check_difference(self, bits) <= length(self.sync_data[bit]) # If there is some sync data with the shift
+                    printstyled("Bit $(bit-1) is shifted with $shift\n", color=:green)
+                    printstyled("The number of wrong bits in sync channels is $(check_difference(self,bits)).\n", color=:red)
+                    error_number += check_difference(self,bits)
+                    if error_number >= self.error_tolerance
+                        is_correct = false
+                        for i in 1:bit
+                            empty(true_data[i])
+                        end
+                        printstyled("Error overflow for Doppler = $shift at$bit")
+                        break
+                    end
                     is_correct = true
                     true_shift = shift
                     append!(true_data[bit], bits)
@@ -182,7 +224,7 @@ module signal_utils
                     for i in 1:bit  # Clear the false data
                         empty!(true_data[i])
                     end
-                    printstyled("$shift", color=:orange)
+                    printstyled("$shift - $bit\n", color=:red)
                     break
                 end
                 empty!(bits)
@@ -192,5 +234,31 @@ module signal_utils
             end
         end
         return true_shift, true_data
+    end
+    "This function returns the number of different bit between two packets"
+    function check_difference(sync::cofdm, data::Vector{Bool})
+        error = 0
+        for i in 1:length(sync.sync_channel)
+            if sync.sync_data[i] != data[sync.sync_channel[i]]
+                error +=1
+            end
+        end
+        return error
+    end
+    "Overload for total difference of the whole transmission"
+    function check_difference(self::cofdm, data::Vector{Vector{Bool}})
+        error = 0
+        if size(self.data) == size(data)
+            for i in 1:length(self.data)
+                if length(self.data[i]) == length(data[i])
+                    for j in length(self.data[i])
+                        if self.data[i][j] != data[i][j]
+                            error +=1
+                        end
+                    end
+                end
+            end
+        end
+        return error
     end
 end
