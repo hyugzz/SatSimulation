@@ -38,7 +38,7 @@ plot(doppler_ratio)
 
 #Generating signal
 sig = signal_utils.generate_signal(a, 1.0)
-plot(sig)
+Plots.plot(sig)
 
 signal_utils.AnalyzeSignal(a, sig, 4)
 
@@ -52,8 +52,6 @@ for i in 1:length(plots)
 end
 plot(fft_freq, fft_data[1])
 
-fft_data[1]
-plot(fft_data[1])
 k = [Vector{Bool}() for _ in 1:length(a.data)]
 for i in 1:4
     k[i] = signal_utils.reconstruct_data(a, fft_data[i], fft_freq)

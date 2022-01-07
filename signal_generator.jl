@@ -47,24 +47,29 @@ module signal_utils
         nb_seq = 0
         for seq in self.data
             nb_seq += 1
+            sync_count = 0
             for chan_bit in 1:length(seq)+length(self.sync_channels)
-                for i in length(self.sync_channels)
+                is_done = false
+                for i in 1:length(self.sync_channels)
                     if chan_bit == self.sync_channels[i]
-                        if sync_data[nb_seq][i]==1           # 1 --> Higher frequency
+                        if self.sync_data[nb_seq][i]==1           # 1 --> Higher frequency
                             tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
                             tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
-                        elseif sync_data[nb_seq]==0       # 0 --> Lower frequency
+                        elseif self.sync_data[nb_seq][i]==0       # 0 --> Lower frequency
                             tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
                             tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
                         end
-                    else
-                        if seq[chan_bit]==1           # 1 --> Higher frequency
-                            tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
-                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
-                        elseif seq[chan_bit]==0       # 0 --> Lower frequency
-                            tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
-                            tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
-                        end
+                        sync_count += 1
+                        is_done = true
+                    end
+                end
+                if is_done == false
+                    if seq[chan_bit-sync_count]==1           # 1 --> Higher frequency
+                        tmp_freq = doppler * (self.frequency+self.interval/2+(chan_bit-1)*self.interval)
+                        tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
+                    elseif seq[chan_bit-sync_count]==0       # 0 --> Lower frequency
+                        tmp_freq = doppler * (self.frequency+(chan_bit-1)*self.interval)
+                        tmp_signal += create_sine(tmp_freq, self.sampling_rate, self.transmission_rate)
                     end
                 end
             end
